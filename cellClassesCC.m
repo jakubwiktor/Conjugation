@@ -1,18 +1,20 @@
+%uppmax code
+% codePath = '/home/bobdylan/elflab/Projects/CRISPR_conjugation/codedev/ImAnalysis/';
+% addpath(codePath);
+% ImAnalysis_setup(); 
+% expInfoObj_base= '/home/bobdylan/elflab/Projects/CRISPR_conjugation/Analysis2/EXPHANDLE/therun/prod/expInfoObj.mat';
+% experiments = {'EXP-22-BJ7093','EXP-22-BY4412','EXP-22-BY4413','EXP-22-BY4414','EXP-22-BY4415','EXP-22-BY4419','EXP-22-BY4436','EXP-22-BY4440','EXP-22-BY4441','EXP-22-BY4442','EXP-22-BY4444','EXP-22-BY4447','EXP-22-BY4448'};
 
+%local code
 codePath = '/hdd2/RecBCD2/codedev/ImAnalysis/';
 addpath(codePath);
 ImAnalysis_setup(); 
-
 expInfoObj_base= '/hdd2/RecBCD2/codedev/Analysis/EXPHANDLE/therun/prod/expInfoObj.mat';
-
-
 experiments = {'EXP-22-BY4442','EXP-22-BY4448'};
 
-for expnum = 1:length(experiments)
+% for expnum = 1:length(experiments)
+for expnum = 2
     
-disp(' ')   
-disp(experiments{expnum})
-
 expInfoObj_path = strrep(expInfoObj_base, 'EXPHANDLE', experiments{expnum});
 
 load(expInfoObj_path)
@@ -23,13 +25,14 @@ channel_name_mCherry = expInfoObj.fluoChannelNames{contains(expInfoObj.fluoChann
 channel_name_SSB = expInfoObj.fluoChannelNames{contains(expInfoObj.fluoChannelNames,'514') | contains(expInfoObj.fluoChannelNames,'venus')};
 SSB_channel_index = find(contains(expInfoObj.fluoChannelNames,'514') | contains(expInfoObj.fluoChannelNames,'venus'));
 
+% save_dir_base = fullfile('/crex/proj/uppstore2018129/elflab/Projects/CRISPR_conjugation/codedev/data', experiments{expnum});
 save_dir_base = fullfile('/hdd2/RecBCD2/codedev/Analysis/output', experiments{expnum});
 mkdir(save_dir_base)
 
 out = {};
-
-for pj = 1 : numpos
-%for pj = 7
+res = {};
+% for pj = 1 : numpos
+for pj = 2 %: numpos
     
     %
     %initialize experiment parameters
@@ -41,140 +44,57 @@ for pj = 1 : numpos
     mCellsMatFile = expInfoObj.getMCellMatPath(posName);
     mCells = Cell.MCell.loadMCells(mCellsMatFile);
     mFrames = Cell.MCell.mFrames;
-%     fluoIndices = expInfoObj.getIndices(posName, fluoChanName);
-%     phaseChanName = expInfoObj.getChannelNames('phase');
-%     phaseRange = expInfoObj.getRange(posName, phaseChanName);
-%     Ts = expInfoObj.getAllT(posName, fluoChanName);
-    
-%     pathFluo = fullfile(sourceDir,posName,fluoChanName);
-%     listFluo = dir(fullfile(pathFluo,'*.tif*'));
-%     listFluo = {listFluo.name};
-
-    pathSeg = fullfile(outputDir,posName,'SegmentedPhase');
-    listSeg = dir(fullfile(pathSeg,'*.tif*'));
-%     listSeg = {listSeg(fluoIndices).name};
-    listSeg = {listSeg(:).name};
-    
+   
     %
     %classification part
     %
     
-    cell_indexes_venus = select_fluo_cells(mCells, SSB_channel_index,2,'stdev',1); %change this function to accept expInfoObj?
-    % get gcf, save, close
+    figure
+    cell_indexes_venus = select_fluo_cells(mCells,SSB_channel_index,'stdev',1); %change this function to accept expInfoObj?
+    
+    %save figure
     saveas(gcf,fullfile(save_dir_base, [posName '_venusThreshold.png']))
     close(gcf)
-
-    cell_indexes_cherry = find_cells_with_spots(expInfoObj,posName,channel_name_mCherry); %improved version
-    % get gcf, save, close
+    
+    figure
+    [cell_indexes_cherry, Tspot] = find_cells_with_spots(expInfoObj,posName,channel_name_mCherry); %improved version
+    
+    %save figure
     saveas(gcf,fullfile(save_dir_base, [posName '_mCherryDetection.png']))
     close(gcf)
-    
+        
     dead_indexes_cells = find_dying_cells(mCells);
     
-    out{pj} = {[mCells.id], cell_indexes_venus, cell_indexes_cherry, dead_indexes_cells, [mCells.birthFrame]};
+    res{pj} = [repmat(pj,[length(mCells),1]) [mCells.id]' cell_indexes_venus cell_indexes_cherry dead_indexes_cells];
     
     %
     %plotting part
     %
-    
-    plotit = 0;
-    if pj == 1
-        plotit = 1;
+    if pj==1
         stack_save_dir = fullfile(save_dir_base,['stack_' posName]);
         mkdir(stack_save_dir)
-    end
-    
-    if ~plotit
-        continue
-    end
-    
-	%parfor vi = 1 : length(expInfoObj.imRange{pj, find(strcmp(expInfoObj.getChannelNames,fluoChanName))})
-    parfor (vi = 1 : length(expInfoObj.imRange{pj, 1}), 5)
-%     parfor vi = 1 : length(expInfoObj.imRange{pj, 1})
-        
-        %fluo = imread(fullfile(pathFluo, listFluo{vi}));
-        seg  = imread(fullfile(pathSeg, listSeg{vi}));
-        %this_frame = fluoIndices(vi);
-        this_frame = vi;
-        
-        seg_selected_cherry = zeros(size(seg));
-        seg_selected_venus  = zeros(size(seg));
-        seg_selected_dead   = zeros(size(seg));
-        
-        all_blobs = [];
-        for ci = 1 : length(mCells)
-            tt = mCells(ci).birthFrame : mCells(ci).lastFrame;
-            if ismember(vi,tt)
-                thisblob = mCells(ci).blobLabels(tt==vi);
-                
-                if thisblob == 0 %sometimes cells can disappear
-                    continue,
-                end
-                
-                all_blobs = [all_blobs; [thisblob mCells(ci).id]];
-                
-            end
-        end
-        
-        for blob = 1:size(all_blobs,1)
-            
-            this_cell = all_blobs(blob,2); %what if there are 2 cells in one blob?
-            
-%             if mCells(this_cell).isBadCell ~= 0
-%                 continue
-%             end
-            
-            %select cells with spots
-            if ismember(this_cell,cell_indexes_cherry) 
-                seg_selected_cherry(seg==all_blobs(blob,1)) = 1;
-            end
-            
-             %select cells with venus intensity
-            if ismember(this_cell,cell_indexes_venus) 
-                seg_selected_venus(seg==all_blobs(blob,1)) = 1;
-            end
-            
-            %select dead cells
-            if ismember(this_cell,dead_indexes_cells) 
-                seg_selected_dead(seg==all_blobs(blob,1)) = 1;
-            end
-                        
-        end
-                
-            
-        rgb = cat(3,repmat((seg>0).*0.5,[1,1,3]));
-        rgb(:,:,1) = rgb(:,:,1) + (seg_selected_cherry>0).*0.5;
-        rgb(:,:,2) = rgb(:,:,2) + (seg_selected_venus>0).*0.5;
-
-        sel_cells = imerode(seg_selected_dead,strel('disk',4));
-
-        rgb(:,:,1) = rgb(:,:,1)-sel_cells;
-        rgb(:,:,2) = rgb(:,:,2)-sel_cells;
-
-        %write image
-        imwrite(rgb, fullfile(stack_save_dir, [num2str(vi) '.tiff']))
-            
-%         T = Ts(:,:,phaseRange(vi));
-% 
-%         transFluoIm = imwarp(fluo,affine2d(T),'outputView',imref2d(size(seg)));
-%         transFluoIm = transFluoIm - mean(transFluoIm(seg==0));
-% 
-%         %imshowpair(edge(seg>0) + edge(seg_selected>0), imadjust(transFluoIm))
-%         %imshowpair(edge(seg>0),seg_selected)
-%         rgb = cat(3,repmat(imadjust(transFluoIm),[1,1,3]));
-%         rgb(:,:,2) = min(rgb(:,:,2) + uint16(edge(seg_selected_venus>0)).*((2^16)-1), ((2^16)-1));
-%         rgb(:,:,1) = min(rgb(:,:,1) + uint16(edge(seg_selected_cherry>0)).*((2^16)-1), ((2^16)-1));
-%         imshow(rgb,[])
-%         %imwrite(uint16(rgb), fullfile('stack',[num2str(vi) '.png']))
-
+        make_stack(expInfoObj, posName, res{pj}, stack_save_dir)
     end
     
 end
 
-T = plot_stats(out);
-writetable(T,fullfile('/crex/proj/uppstore2018129/elflab/Projects/CRISPR_conjugation/codedev/data',[experiments{expnum},'.csv']))
+%spell out the results
+disp('')
+disp('Results for:')   
+disp(experiments{expnum})
+T = array2table(vertcat(res{:}), 'VariableNames',{'posnum', 'id', 'venus', 'cherry', 'dead'});
+fprintf('\n========= Cell stats ===========\n')
+fprintf('Num. of cells: %d\n', height(T))
+fprintf('Num. of recipient cells (v+/c-): %d\n', sum(T.venus))
+fprintf('Num. of donor cells (v-/c+): %d\n', sum(~T.venus & T.cherry))
+fprintf('Num. of conjugants cells (v+/c+): %d\n', sum(T.venus & T.cherry))
+fprintf('Num. of unclassified cells (v-/c+): %d\n', sum(~T.venus & ~T.cherry))
+fprintf('Num. of dead/SOS recipients cells: %d\n', sum(T.dead & T.venus))
+fprintf('Num. of dead donors %d\n', sum(T.dead & (~T.venus & T.cherry)))
 
-% histogram([mCells(intersect(cell_indexes_venus,cell_indexes_cherry)).birthFrame])
+writetable(Tspot,fullfile(save_dir_base,'spot_data.csv'))
+writetable(T,fullfile(save_dir_base,'cell_data.csv'))
+
 end
 
 
@@ -185,36 +105,114 @@ end
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+function make_stack(expInfoObj, posName, cell_classes, stack_save_dir)
+% Construct RGB image for each segmentation image and color cells depending
+% on the selection criteria. Green - 'venus high' cells, red - 'mcherry'
+% cells, and yellow - 'transconjugated' cells. Cells with just an outline
+% and dark inside are classified as dead/stressed. 
+%
+% inupt: expInfoObj - expInfo structure from ImAnalysis pipeline
+%        posName - string, name of the position as in expInfoObj.positions
+%        cell_classes - n-by-5 matrix where the columns are: 1-position
+%        number, 2-cellId (as in mCells.id), 3-to-5 - bool cell clases
+%        specifying if given cell is classified as venus, cherry, or dead.
+%
+% output: none, the function saves the images in spacified folder.
+
+outputDir = expInfoObj.getPathName('output');
+mCellsMatFile = expInfoObj.getMCellMatPath(posName);
+mCells = Cell.MCell.loadMCells(mCellsMatFile);
+
+pj = find(ismember(expInfoObj.positions,posName));
+pathSeg = fullfile(outputDir,posName,'SegmentedPhase');
+listSeg = dir(fullfile(pathSeg,'*.tif*'));
+listSeg = {listSeg(:).name};
+
+T = array2table(cell_classes, 'VariableNames',{'posnum', 'id', 'venus', 'cherry', 'dead'});
+
+parfor (vi = 1 : length(expInfoObj.imRange{pj, 1}), 5)
+% for vi = 1 : length(expInfoObj.imRange{pj, 1})
+
+    seg  = imread(fullfile(pathSeg, listSeg{vi}));
+   
+    %vectorize cell selection - 20x faster than loops
+    props = regionprops(seg,'PixelList');
+    
+    %calculate links between blobs and cells and classes
+    all_blobs = zeros(length(mCells)-1,5);
+    for ci = 1 : length(mCells)
+        tt = mCells(ci).birthFrame : mCells(ci).lastFrame;
+        if ismember(vi,tt)
+            thisblob = mCells(ci).blobLabels(tt==vi);
+            
+            if thisblob == 0 %sometimes cells can disappear
+                continue,
+            end
+            %cell id, blobNumber, cell clasees
+            all_blobs(ci,:) = [mCells(ci).id thisblob T.venus(ci) T.cherry(ci) T.dead(ci)];
+            
+        end
+    end
+    all_blobs(all(all_blobs == 0,2),:) = []; %remove empty rows
+    
+    seg_selected_venus  = zeros(size(seg));
+    tmp = vertcat(props(all_blobs(all_blobs(:,3)==1,2)).PixelList);
+    seg_selected_venus(sub2ind(size(seg),tmp(:,2),tmp(:,1))) = 1;
+    
+    seg_selected_cherry = zeros(size(seg));
+    tmp = vertcat(props(all_blobs(all_blobs(:,4)==1,2)).PixelList);
+    seg_selected_cherry(sub2ind(size(seg),tmp(:,2),tmp(:,1))) = 1;
+    
+    seg_selected_dead   = zeros(size(seg));
+    tmp = vertcat(props(all_blobs(all_blobs(:,5)==1,2)).PixelList);
+    seg_selected_dead(sub2ind(size(seg),tmp(:,2),tmp(:,1))) = 1;
+   
+    rgb = cat(3,repmat((seg>0).*0.5,[1,1,3]));
+    rgb(:,:,1) = rgb(:,:,1) + (seg_selected_cherry>0).*0.5;
+    rgb(:,:,2) = rgb(:,:,2) + (seg_selected_venus>0).*0.5;
+    
+    sel_cells = imerode(seg_selected_dead,strel('disk',4));
+    
+    rgb(:,:,1) = rgb(:,:,1)-sel_cells;
+    rgb(:,:,2) = rgb(:,:,2)-sel_cells;
+    
+    %imshow(rgb)
+    %drawnow
+
+    imwrite(rgb, fullfile(stack_save_dir, [num2str(vi) '.tiff']))
+    
+end
+end
 
 
 function cell_inds = select_spots_cells(mCells,channel_name,min_spot_time)
-    
-    %documentation. Its important here to keep the min_spot_time as
-    % '1' because mCherry is imaged so infrequently, cells dont have much
-    % time to accumulate frames with spots.
-    %OLD VERSION!
-    
-    assert(~isempty([mCells.particles]), 'fluo intensities are empty')
 
-    cell_inds = [];
-    for ci = 1:length(mCells)
-        spot_indexes = find(strcmp({mCells(ci).particles.channelName},channel_name));
-        spot_struct = mCells(ci).particles(spot_indexes);
-        frames_with_foci = ~cellfun(@isempty,{spot_struct.id});
-        if length(unique([spot_struct(frames_with_foci).cellDetectionFrames])) > min_spot_time
-            cell_inds = [cell_inds mCells(ci).id];
-        end
+%documentation. Its important here to keep the min_spot_time as
+% '1' because mCherry is imaged so infrequently, cells dont have much
+% time to accumulate frames with spots.
+%OLD VERSION!
+
+assert(~isempty([mCells.particles]), 'fluo intensities are empty')
+
+cell_inds = [];
+for ci = 1:length(mCells)
+    spot_indexes = find(strcmp({mCells(ci).particles.channelName},channel_name));
+    spot_struct = mCells(ci).particles(spot_indexes);
+    frames_with_foci = ~cellfun(@isempty,{spot_struct.id});
+    if length(unique([spot_struct(frames_with_foci).cellDetectionFrames])) > min_spot_time
+        cell_inds = [cell_inds mCells(ci).id];
     end
+end
        
 end
 
-function cell_indexes = find_cells_with_spots(expInfoObj,pos_name,fluoChanName)
+function [res, Tspot] = find_cells_with_spots(expInfoObj,pos_name,fluoChanName)
 % Function to detect ParB foci for CRISPR conjugation project. The spots are
 % first detected usign radial symmetry algorightm and then are filtered by
 % applying 2d gaussian fit and discarding foci with poor fit, or with broad
 % fit. 
 %
-%   cell_indexes = findCellsWithSpots(expInfoObj,'Pos0','fluo594')
+%   res = findCellsWithSpots(expInfoObj,'Pos0','fluo594')
 %
 %   Input:
 %       expInfoObj - struct, expInfoObj structure from ImAnalysis pipeline
@@ -222,7 +220,11 @@ function cell_indexes = find_cells_with_spots(expInfoObj,pos_name,fluoChanName)
 %       chan_index - string, name of fluorescenc channel, as in expInfoObj
 %
 %   Output:
-%       cell_indexes - indexes of cells with spots as in mCell.id
+%       res - vector where each index corresponds to mCells.id field and is
+%           1 if the cell had at least a single detected spot during its
+%           lifetime, and 0 when not.
+%       Tspot - table with frame number, cellId, and x and y position of
+%          detected spots
 
 pos_index = find(strcmp(expInfoObj.getPositionList,pos_name));
 if isempty(pos_index)
@@ -326,7 +328,6 @@ for vi = 1:length(expInfoObj.imRange{pos_index, chan_index})
     end
     
     if plotit
-        figure
         imshow(transFluoIm,prctile(double(transFluoIm(:)),[0, 99]))
         hold on
         plot(xx,yy,'ro')
@@ -345,92 +346,107 @@ for vi = 1:length(expInfoObj.imRange{pos_index, chan_index})
     %connect blobs to cells - save blob id, cell id, and number of detected spots
     all_blobs = [];
     for this_cell = mCells'
-        
         tt = this_cell.birthFrame : this_cell.lastFrame;
-        
         if ismember(this_frame,tt)
-          
             thisblob = this_cell.blobLabels(tt==this_frame);
-            
             if thisblob == 0 %sometimes cells can disappear
                 continue,
             end
-            
             all_blobs = [all_blobs; [thisblob this_cell.id 0]];
-            
         end
-        
     end
     
     T = array2table(all_blobs, 'VariableNames', {'blobId','cellId','spotsNum'});
     
-    %put spots inside cells - use region props to speed up
+    %use regionprops to put spots inside cells fast
+    
+    %this makes 2d image of with pixel value related to the spot index
     spot_mat = zeros(size(seg));
-   
     for eachspot = 1:length(yy)
-   
         spot_mat(yy(eachspot),xx(eachspot)) = eachspot;
-   
     end
     
     seg_fat = imdilate(seg, strel('disk',2));
     propspot = regionprops(seg_fat,spot_mat,'PixelValues');
     
     %cell_spot_list = {};
-%     testim = zeros(size(seg)); %for plotting cells with spots
+	%testim = zeros(size(seg)); %for plotting cells with spots
     
+    spot_pos_mat = []; %also save all spot detections together with the frame number and cellId
     for bj = 1:length(propspot)
-        
         tmp = unique(propspot(bj).PixelValues);
-        
         if sum(tmp>0) > 0
-        
-            %cell_spot_list{bj} = [xx(tmp(tmp>0)) yy(tmp(tmp>0))]; %xy position of spots
             T.spotsNum(T.blobId == bj) = sum(tmp>0);
+            if ~isempty(T.spotsNum(T.blobId == bj))
+                cellid = T.cellId(find(T.blobId == bj));
+                
+                %store positions of spots
+                for this_cellid = cellid'
+                    spot_pos_mat = [spot_pos_mat; [repmat(this_frame,[sum(tmp>0) 1]),...
+                                                   repmat(this_cellid,[sum(tmp>0) 1]),...
+                                                   xx(tmp(2:end)),...
+                                                   yy(tmp(2:end))]];
+                end
+            end
 %             testim = testmat + (seg == bj);
-      
         end
-        
     end
     
 %     imshowpair(transFluoIm.*20,edge(testim))
 %     disp('breakpoint')
-    
+
+    spot_positions{vi} = spot_pos_mat;
     cell_indexes{vi} =  T.cellId(T.spotsNum>0);
     
 end
 
-cell_indexes = unique(vertcat(cell_indexes{:}))';
+%reconstruct the output matrix to match n-by-2
+cell_indexes = unique(vertcat(cell_indexes{:}));
 
+%prepare the output matrix
+res = zeros(length(mCells),1);
+for tc = mCells'  
+    if ismember(tc.id,cell_indexes)
+        res(tc.id) = 1;
+    end
 end
 
-function cell_inds = select_fluo_cells(mCells, fluo_chan_index, min_fluo_time, algorithm, plot_it)
+%prepare table of detected spots
+spot_positions = vertcat(spot_positions{:});
+Tspot = array2table(spot_positions, 'VariableNames', {'frame','cellId','x','y'});
+Tspot = sortrows(Tspot,["frame","cellId"]);
+end
+
+function [res] = select_fluo_cells(mCells, fluo_chan_index, algorithm, plot_it)
     %  selecting cells that contain fluorescnce in a one channel given that
-    %  two populations of cells are mixed in one mCells structure. Selection
-    %  is done by fitting 2-gaussian model onto fluorescent data. Requires
-    %  fitgmdist function from statistic toolbox
-    %
+    %  two populations of cells are mixed in one mCells structure.
+    %  3 different approaches can be selected - minimizing standar
+    %  deviation between 2 populations, fitting 2-gaussian model, or by
+    %  clustering the data (the last approach consolidates fluorescence and
+    %  time and is suitable for conditions when one population dissapears
+    %  during the experiments - e.g. when cells are pushed out of the
+    %  growth chamber). Cells is fluorescent when at least half of its
+    %  frames are in high fluorescnce population.
     %
     %  input: 
-    %       mCells - Cell.MCell object
+    %       mCells - mCells object from ImAnalysis pipeline
     %   
     %       fluo_chan_index - index of fluorescent channel to analyse as in
     %           mChells.fluoIntensities field
-    %
-    %       min_fluo_time - minimum number of frames at which cell
-    %           displayed fluorescence signal above threshold
     %       
     %        plot_it - bool, if distributions should be plotted.
+    %        algorithm - 'stdev,'gaussian','clustering'
     %
     %    output:
-    %       indexes of cells with fluoresncence above threshold as in
-    %       mCells(i).id
+    %       res = vector where indexes correspond to mCells.id field and
+    %       the value is 1 if cell is classified as high-fluorescent, and
+    %       0 otherwise
 
     assert(~isempty([mCells.fluoIntensities]), 'fluo intensities are empty')
     
-    assert(any(strcmp({'gaussians','stdev'},algorithm)), 'wrong algorithm specified, can be "gaussians", or "stdev"')
+    assert(any(strcmp({'gaussians','stdev','clustering'},algorithm)), 'wrong algorithm specified, can be "gaussians", or "stdev"')
     
-    if nargin<5
+    if nargin<4
         plot_it = 0;
     end
 
@@ -449,14 +465,12 @@ function cell_inds = select_fluo_cells(mCells, fluo_chan_index, min_fluo_time, a
     
     uni_t = unique(t);
     thresholds = zeros(1,length(uni_t));
-    selected_cells = cell(length(uni_t),1);
-
+    cell_classes = zeros(size(dout,1),1);
+    
     switch algorithm
         %maybe mix those approaches in case gaussian fails?
-        
         case 'gaussians'
         %1st approach - use gaussian mixture model - needts ditgmidst function
-        
         for ti = 1:length(uni_t)
             this_t = uni_t(ti);
             this_f = f(t==this_t);
@@ -467,16 +481,14 @@ function cell_inds = select_fluo_cells(mCells, fluo_chan_index, min_fluo_time, a
             yspace = GMModel.pdf(xspace');
             [~, min_ind] = min(yspace);
             thresholds(ti) = xspace(min_ind);
-            selected_cells{ti} = dout(t==uni_t(ti) & f > thresholds(ti), 3); %cell index is 3
+            cell_classes(t==uni_t(ti) & f > thresholds(ti)) = 1;
         end
-    
+
         case 'stdev'
         %2nd approach - split data in 2 and minimize standard deviation
-        
         for ti = 1:length(uni_t)
             this_t = uni_t(ti);
             this_f = f(t==this_t);
-
             this_f = rmoutliers(this_f);
             this_f_sorted = sort(this_f);        
             min_val = inf;
@@ -491,46 +503,75 @@ function cell_inds = select_fluo_cells(mCells, fluo_chan_index, min_fluo_time, a
                 end
             end
             thresholds(ti) = this_f_sorted(min_ind);
-            selected_cells{ti} = dout(t==uni_t(ti) & f > thresholds(ti), 3); %cell index is 3
+            cell_classes(t==uni_t(ti) & f > thresholds(ti)) = 1;
+        end
+
+        case 'clustering'
+        %3rd approach - cluster data - works if one population
+        %dissapears during the exp., when cells are not mixed while
+        %loading
+        fitdata = [];
+        for tc = mCells'
+            f = tc.fluoIntensities(fluo_chan_index,:);
+            gi = ~isnan(f);
+            f = f(gi);
+            t = tc.birthFrame:tc.lastFrame;
+            t = t(gi);
+            [~, idxs] = rmoutliers(f);
+            fitdata = [fitdata; [t(~idxs)' f(~idxs)']];
+        end
+
+        %correct for bleaching
+        ft = fit(fitdata(:,1),fitdata(:,2),'exp2');
+        x = unique(dout(:,1));
+        fitvals = ft(x);
+        corrvals = fitvals./fitvals(1);
+        fluo_corrected = dout(:,2);
+        for tj = x'
+            fluo_corrected(dout(:,1)==tj) = fluo_corrected(dout(:,1)==tj) ./ corrvals(x==tj);
+        end
+
+        %cluster the data into 2 populations
+        cell_classes = clusterdata([dout(:,1),fluo_corrected],'Linkage','ward','SaveMemory','on','Maxclust',2);
+
+    end   
+    
+    [~,hig_fluo_ind] = max([mean(dout(cell_classes==1,2)), mean(dout(cell_classes==2,2))]);
+    high_fluo_pop = dout(cell_classes==hig_fluo_ind,3);
+
+    %prepare the output matrix
+    res = zeros(length(mCells),1);
+    for tc = mCells'  
+        fluo_frames = tc.fluoIntensities(fluo_chan_index,:);
+        fluo_lifetime = sum(~isnan(fluo_frames));
+        if sum(high_fluo_pop == tc.id) >= 0.5*fluo_lifetime
+            res(tc.id) = 1;
         end
     end
-    
-    preselected_cells = vertcat(selected_cells{:});
-    cells_above_threshold = unique(preselected_cells);
-    
-    cell_inds = [];
-    for cindex = cells_above_threshold'
-        if sum(preselected_cells==cindex) > min_fluo_time
-            cell_inds = [cell_inds mCells(cindex).id];
-        end
-    end
-    
+
     if plot_it
-       figure
-       hold on
-       plot(t+randn([length(t) 1])./2,f,'.k','MarkerSize',2), 
-       xlim([0 max(t)])
-       plot(uni_t, thresholds,'r','LineWidth',2)
-       title('Fluorescnce signal and threshold')
-       xlabel('Frame number')
-       ylabel('Fluorescence intensity (au)')
+        gscatter(dout(:,1)+randn(length(dout(:,2)),1)./2,dout(:,2),cell_classes,['k','r'],['.','.'],[2,2])
+        drawnow
     end
 
 end
 
-function [cell_indexes] = find_dying_cells(mCells)
-% Selection of cells that are dying. It does not work very well yet,
-% but seems to have low number of false positives, but still misses
-% many cells that stop growing
-
-%try incorporate the concept of good detection frames here?
+function res = find_dying_cells(mCells)
+ %selection of stressed/dying cells. The cells is classified as
+ %stressed/dying if it stops growing (when exp1 fit is poor and its size
+ %can be better fit by a parabola), or when it is 3 times larger than a
+ %typical cell at division.
+ %
+ % input: mCells structure from ImAnalysis pipeline
+ %
+ % output: res - vector where each index corresponds to mCells.id field and is
+ %           1 if the cell is stressed/dead, 0 otherwise
 
 cell_indexes = {};
 
-size_diff_thresh = -500; %big drop in size
 med_lifetime = median([mCells.lifeTime]);
 med_size = median(cellfun(@(x) x(end), {mCells.areas}));
-% figure
+size_diff_thresh = -med_size/3; %big drop in size
 
 for ci = 1:length(mCells)
     
@@ -556,9 +597,7 @@ for ci = 1:length(mCells)
     end
 
     t = 1:length(a);
-    
     [~, outlierInd] = rmoutliers(a);
-    
     a = a(~outlierInd);
     t = t(~outlierInd);
     
@@ -570,96 +609,27 @@ for ci = 1:length(mCells)
     
     %cells with poor exp fit are selected
     if gof.rsquare < 0.5
-        
         [ft2, gof2] = fit(t', a', 'poly2');        
-        
         if  ft2.p1 < 0 &&  min(diff(a)) > size_diff_thresh
-            
             cell_indexes{ci} = this_cell.id;
-
-%             nexttile
-%             hold on
-%             plot(t,a,'ok')
-%             plot(t,ft2(t),'b')
+            nexttile
+            hold on
+            plot(t,a,'ok')
+            plot(t,ft2(t),'b')
+            xlabel('frame')
+            ylabel('size (px^2)')
 %          
         end
     end
     %
 end
+
 cell_indexes = horzcat(cell_indexes{:});
+res = zeros(length(mCells),1);
+for tc = mCells'  
+    if ismember(tc.id,cell_indexes)
+        res(tc.id) = 1;
+    end
 end
 
-
-function T = plot_stats(out)
-% a quick wrapper on the out cell data structure to print some stats about
-% the experiment
-
-% cell_indexes_venus = select_fluo_cells(mCells,2,2,'stdev',0);
-% cell_indexes_cherry = select_spots_cells(mCells,'fluor_594_cherry',1);
-% dead_indexes_dead = find_dying_cells(mCells);
-
-num_all = 0;
-num_recipient = 0;
-num_donor = 0;
-num_conj = 0;
-num_unselected = 0;
-num_dead_venus = 0;
-num_dead_cherry = 0;
-    
-res = {};
-
-for ii = 1:length(out)
-    %1 all cells
-    %2 venus
-    %3 cherry
-    %4 dead
-    %5 birthframe
-    if isempty(out{ii})
-        continue
-    end
-    
-    res_tmp = cell(length(out{ii}{1}),5);
-    
-    all_cells = [out{ii}{1}];
-    cell_indexes_venus = out{ii}{2};
-    cell_indexes_cherry = out{ii}{3};
-    dead_indexes_dead = out{ii}{4};
-    
-    unselected_cells = setxor(all_cells,unique([cell_indexes_venus cell_indexes_cherry]));
-    only_cherry_cells = setxor(cell_indexes_cherry , intersect(cell_indexes_cherry, cell_indexes_venus));
-    dead_venus = intersect(cell_indexes_venus,dead_indexes_dead);
-    dead_cherry = intersect(only_cherry_cells ,dead_indexes_dead);
-    
-    num_all = num_all + length(all_cells);
-    num_recipient = num_recipient + length(cell_indexes_venus);
-    num_donor = num_donor + length(cell_indexes_cherry);
-    num_conj = num_conj + length(intersect(cell_indexes_venus,cell_indexes_cherry));
-    num_unselected = num_unselected + length(unselected_cells);
-    num_dead_venus = num_dead_venus + length(dead_venus);
-    num_dead_cherry = num_dead_cherry + length(dead_cherry);
-    
-    for eachcell = all_cells
-    	res_tmp{eachcell,1} = ii;
-        res_tmp{eachcell,2} = eachcell;
-        res_tmp{eachcell,3} = ismember(eachcell,cell_indexes_venus);
-        res_tmp{eachcell,4} = ismember(eachcell,cell_indexes_cherry);
-        res_tmp{eachcell,5} = ismember(eachcell, dead_indexes_dead);
-    end
-    
-    res{ii} = res_tmp;
-    
-end
-res = vertcat(res{:});
-
-%make into table and save the table
-T = cell2table(res, 'VariableNames',{'posname', 'id', 'SSB', 'mCherry', 'stressed'});
-
-fprintf('\n========= Cell stats ===========\n')
-fprintf('Num. of cells: %d\n', num_all)
-fprintf('Num. of recipient cells (v+/c+-): %d\n', num_recipient)
-fprintf('Num. of donor cells (v-/c+): %d\n', num_donor)
-fprintf('Num. of conjugants cells (v+/c+): %d\n', num_conj)
-fprintf('Num. of unclassified cells (v-/c+): %d\n', num_unselected)
-fprintf('Num. of dead/SOS recipients cells: %d\n', num_dead_venus)
-fprintf('Num. of dead donors %d\n', num_dead_cherry)
 end

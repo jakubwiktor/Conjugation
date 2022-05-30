@@ -1,0 +1,92 @@
+   
+    plotit = 0;
+    if pj == 1
+        plotit = 1;
+        stack_save_dir = fullfile(save_dir_base,['stack_' posName]);
+        mkdir(stack_save_dir)
+    end
+    
+    if ~plotit
+        continue
+    end
+    
+	%parfor vi = 1 : length(expInfoObj.imRange{pj, find(strcmp(expInfoObj.getChannelNames,fluoChanName))})
+    parfor (vi = 1 : length(expInfoObj.imRange{pj, 1}), 5)
+%     parfor vi = 1 : length(expInfoObj.imRange{pj, 1})
+        
+        %fluo = imread(fullfile(pathFluo, listFluo{vi}));
+        seg  = imread(fullfile(pathSeg, listSeg{vi}));
+        %this_frame = fluoIndices(vi);
+        this_frame = vi;
+        
+        seg_selected_cherry = zeros(size(seg));
+        seg_selected_venus  = zeros(size(seg));
+        seg_selected_dead   = zeros(size(seg));
+        
+        all_blobs = [];
+        for ci = 1 : length(mCells)
+            tt = mCells(ci).birthFrame : mCells(ci).lastFrame;
+            if ismember(vi,tt)
+                thisblob = mCells(ci).blobLabels(tt==vi);
+                
+                if thisblob == 0 %sometimes cells can disappear
+                    continue,
+                end
+                
+                all_blobs = [all_blobs; [thisblob mCells(ci).id]];
+                
+            end
+        end
+        
+        for blob = 1:size(all_blobs,1)
+            
+            this_cell = all_blobs(blob,2); %what if there are 2 cells in one blob?
+            
+%             if mCells(this_cell).isBadCell ~= 0
+%                 continue
+%             end
+            
+            %select cells with spots
+            if ismember(this_cell,cell_indexes_cherry) 
+                seg_selected_cherry(seg==all_blobs(blob,1)) = 1;
+            end
+            
+             %select cells with venus intensity
+            if ismember(this_cell,cell_indexes_venus) 
+                seg_selected_venus(seg==all_blobs(blob,1)) = 1;
+            end
+            
+            %select dead cells
+            if ismember(this_cell,dead_indexes_cells) 
+                seg_selected_dead(seg==all_blobs(blob,1)) = 1;
+            end
+                        
+        end
+                
+            
+        rgb = cat(3,repmat((seg>0).*0.5,[1,1,3]));
+        rgb(:,:,1) = rgb(:,:,1) + (seg_selected_cherry>0).*0.5;
+        rgb(:,:,2) = rgb(:,:,2) + (seg_selected_venus>0).*0.5;
+
+        sel_cells = imerode(seg_selected_dead,strel('disk',4));
+
+        rgb(:,:,1) = rgb(:,:,1)-sel_cells;
+        rgb(:,:,2) = rgb(:,:,2)-sel_cells;
+
+        %write image
+        imwrite(rgb, fullfile(stack_save_dir, [num2str(vi) '.tiff']))
+            
+%         T = Ts(:,:,phaseRange(vi));
+% 
+%         transFluoIm = imwarp(fluo,affine2d(T),'outputView',imref2d(size(seg)));
+%         transFluoIm = transFluoIm - mean(transFluoIm(seg==0));
+% 
+%         %imshowpair(edge(seg>0) + edge(seg_selected>0), imadjust(transFluoIm))
+%         %imshowpair(edge(seg>0),seg_selected)
+%         rgb = cat(3,repmat(imadjust(transFluoIm),[1,1,3]));
+%         rgb(:,:,2) = min(rgb(:,:,2) + uint16(edge(seg_selected_venus>0)).*((2^16)-1), ((2^16)-1));
+%         rgb(:,:,1) = min(rgb(:,:,1) + uint16(edge(seg_selected_cherry>0)).*((2^16)-1), ((2^16)-1));
+%         imshow(rgb,[])
+%         %imwrite(uint16(rgb), fullfile('stack',[num2str(vi) '.png']))
+
+    end
