@@ -10,10 +10,10 @@ codePath = '/hdd2/RecBCD2/codedev/ImAnalysis/';
 addpath(codePath);
 ImAnalysis_setup(); 
 expInfoObj_base= '/hdd2/RecBCD2/codedev/Analysis/EXPHANDLE/therun/prod/expInfoObj.mat';
-experiments = {'EXP-22-BY4442','EXP-22-BY4448'};
+experiments = {'EXP-22-BY4440','EXP-22-BY4442','EXP-22-BY4444','EXP-22-BY4448'};
 
-% for expnum = 1:length(experiments)
-for expnum = 2
+for expnum = 1%:length(experiments)
+% for expnum = 1:2
     
 expInfoObj_path = strrep(expInfoObj_base, 'EXPHANDLE', experiments{expnum});
 
@@ -26,13 +26,11 @@ channel_name_SSB = expInfoObj.fluoChannelNames{contains(expInfoObj.fluoChannelNa
 SSB_channel_index = find(contains(expInfoObj.fluoChannelNames,'514') | contains(expInfoObj.fluoChannelNames,'venus'));
 
 % save_dir_base = fullfile('/crex/proj/uppstore2018129/elflab/Projects/CRISPR_conjugation/codedev/data', experiments{expnum});
-save_dir_base = fullfile('/hdd2/RecBCD2/codedev/Analysis/output', experiments{expnum});
+save_dir_base = fullfile('/hdd2/RecBCD2/codedev/data', experiments{expnum});
 mkdir(save_dir_base)
 
-out = {};
 res = {};
-% for pj = 1 : numpos
-for pj = 2 %: numpos
+for pj = 1 : numpos
     
     %
     %initialize experiment parameters
@@ -50,23 +48,26 @@ for pj = 2 %: numpos
     %
     
     figure
-    cell_indexes_venus = select_fluo_cells(mCells,SSB_channel_index,'stdev',1); %change this function to accept expInfoObj?
+    cell_indexes_venus = select_fluo_cells(mCells,SSB_channel_index,'clustering',1); %change this function to accept expInfoObj?
+%     cell_indexes_venus = select_fluo_cells(mCells,SSB_channel_index,'gaussians',1); %change this function to accept expInfoObj?
     
     %save figure
     saveas(gcf,fullfile(save_dir_base, [posName '_venusThreshold.png']))
     close(gcf)
     
     figure
-    [cell_indexes_cherry, Tspot] = find_cells_with_spots(expInfoObj,posName,channel_name_mCherry); %improved version
+    [cell_indexes_cherry, spot_positions] = find_cells_with_spots(expInfoObj,posName,channel_name_mCherry); %improved version
     
     %save figure
     saveas(gcf,fullfile(save_dir_base, [posName '_mCherryDetection.png']))
     close(gcf)
-        
+    
+    %writetable(Tspot,fullfile('UPDATE IT' '.csv']))
+    
     dead_indexes_cells = find_dying_cells(mCells);
     
     res{pj} = [repmat(pj,[length(mCells),1]) [mCells.id]' cell_indexes_venus cell_indexes_cherry dead_indexes_cells];
-    
+    res_spots{pj} = spot_positions;
     %
     %plotting part
     %
@@ -92,8 +93,11 @@ fprintf('Num. of unclassified cells (v-/c+): %d\n', sum(~T.venus & ~T.cherry))
 fprintf('Num. of dead/SOS recipients cells: %d\n', sum(T.dead & T.venus))
 fprintf('Num. of dead donors %d\n', sum(T.dead & (~T.venus & T.cherry)))
 
-writetable(Tspot,fullfile(save_dir_base,'spot_data.csv'))
 writetable(T,fullfile(save_dir_base,'cell_data.csv'))
+
+Tspot = vertcat(res_spots{:});
+
+writetable(Tspot,fullfile(save_dir_base,'spot_data.csv'))
 
 end
 
@@ -330,14 +334,14 @@ for vi = 1:length(expInfoObj.imRange{pos_index, chan_index})
     if plotit
         imshow(transFluoIm,prctile(double(transFluoIm(:)),[0, 99]))
         hold on
-        plot(xx,yy,'ro')
+%         plot(xx,yy,'ro')
     end
     
     xx = xx(sel_condition);
     yy = yy(sel_condition);
     
     if plotit
-        plot(xx,yy,'go')
+        plot(xx,yy,'g.')
         drawnow
     end
 
@@ -382,7 +386,8 @@ for vi = 1:length(expInfoObj.imRange{pos_index, chan_index})
                 
                 %store positions of spots
                 for this_cellid = cellid'
-                    spot_pos_mat = [spot_pos_mat; [repmat(this_frame,[sum(tmp>0) 1]),...
+                    spot_pos_mat = [spot_pos_mat; [repmat(pos_index,[sum(tmp>0) 1]),...
+                                                   repmat(this_frame,[sum(tmp>0) 1]),...
                                                    repmat(this_cellid,[sum(tmp>0) 1]),...
                                                    xx(tmp(2:end)),...
                                                    yy(tmp(2:end))]];
@@ -413,8 +418,8 @@ end
 
 %prepare table of detected spots
 spot_positions = vertcat(spot_positions{:});
-Tspot = array2table(spot_positions, 'VariableNames', {'frame','cellId','x','y'});
-Tspot = sortrows(Tspot,["frame","cellId"]);
+Tspot = array2table(spot_positions, 'VariableNames', {'posnum','frame','id','x','y'});
+Tspot = sortrows(Tspot,["frame","id"]);
 end
 
 function [res] = select_fluo_cells(mCells, fluo_chan_index, algorithm, plot_it)
@@ -612,12 +617,12 @@ for ci = 1:length(mCells)
         [ft2, gof2] = fit(t', a', 'poly2');        
         if  ft2.p1 < 0 &&  min(diff(a)) > size_diff_thresh
             cell_indexes{ci} = this_cell.id;
-            nexttile
-            hold on
-            plot(t,a,'ok')
-            plot(t,ft2(t),'b')
-            xlabel('frame')
-            ylabel('size (px^2)')
+%             nexttile
+%             hold on
+%             plot(t,a,'ok')
+%             plot(t,ft2(t),'b')
+%             xlabel('frame')
+%             ylabel('size (px^2)')
 %          
         end
     end

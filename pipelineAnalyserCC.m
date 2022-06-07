@@ -1,7 +1,7 @@
 %pipeline wrapper
 
-anal_dir = '/hdd2/RecBCD2/codedev/Analysis/EXP-22-BY4442';
-exp_dir = '/hdd2/RecBCD2/EXP-22-BY4439';
+anal_dir = '/hdd2/RecBCD2/codedev/Analysis/EXP-22-BY4444';
+exp_dir = '/hdd2/RecBCD2/EXP-22-BY4443';
 exp_name = {'therun'};
 parameter_file_path = fullfile('/hdd2/RecBCD2/codedev','ParameterFile.txt');
 
@@ -16,7 +16,7 @@ for exp = 1
 %     vars.fluo_names = {'fluor_594_cherry','fluor_YFP_venus'};    
     vars.add_fluo_chans = {'fluor_YFP_venus'};
     vars.trans_mat_file = '';
-%     vars.barcodeROI = '';
+%     vars.barcodeROI = [];
 %     vars.ROI = '';
     vars.param_file_base = parameter_file_path;
     vars.code_dir = codePath;
@@ -79,6 +79,7 @@ params = expInfoObj.parameters;
 %
 %-----------------------------
 
+seg_start = tic;
 
 %get list of images - assume that its caalled PreprocessedPhase
 all_images = dir(fullfile(vars.outputDir,'**/PreprocessedPhase/*.tif*')); %recursively, 
@@ -115,7 +116,8 @@ for nij = 1:length(chunks)-1                %if snowy then just single core and 
                   
     system(system_command)
 end
-
+seg_end = datestr(seconds(toc(seg_start)),'HH:MM:SS');
+disp(['Segmentation finished in: ' seg_end])
 
 %-----------------------------
 %
@@ -124,8 +126,6 @@ end
 %  it, other solution would require rewriting the blob computation code
 %
 %-----------------------------
-
-
 seg_postprocessing_start = tic;
 disp('Cleaning up segmentation images')
 
@@ -157,22 +157,6 @@ disp(['Segmentation images cleaned in: ' seg_postprocessing_end])
 %
 %-----------------------------
 
-
-% %do the tracking
-% mod_params = {'doPreprocessing', 2,...
-%               'doSegmentation', 2,...
-%               'doBlobProcessing', 1,...
-%               'shortTrackCutOff', 5,...
-%               'centerOfMassMovementCutOff', 35,...
-%               'parforPositions', 1,...
-%               'parNumWorkers',8};
-
-% param_file = fullfilevars.outputDir,['ParameterFile_' vars.this_exp '.txt']);
-%run function
-% modParamFile(vars.param_file_base,mod_params(1:2:end),mod_params(2:2:end),param_file) %initial parameter file
-% processCells(vars.sourceDir, fullfile(vars.outputDir,'prod'), param_file, vars.code_dir)
-
-%trying different thing
 params.doPreprocessing = 2;
 params.doSegmentation = 2;
 params.doBlobProcessing = 1;
@@ -181,7 +165,7 @@ params.doDotDetection = 0;
 params.shortTrackCutOff = 5;
 params.centerOfMassMovementCutOff = 35;
 params.parforPositions = 1;
-params.parNumWorkers = 10;
+params.parNumWorkers = 12;
 processCells(vars.sourceDir, fullfile(vars.outputDir,'prod'), params, vars.code_dir)
 
 %-----------------------------
@@ -190,35 +174,17 @@ processCells(vars.sourceDir, fullfile(vars.outputDir,'prod'), params, vars.code_
 %
 %-----------------------------
 
-
-% mod_params = {'doBlobProcessing', 2,...
-%               'doDotDetection',1,...
-%               'dotDetectionAlg','wavelet',...
-%               'dotTrackingAlg','',...
-%               'cellInclusionMargin',1,...
-%               'noiseThreshold',3.5,...
-%               'minSpotArea',4,...
-%               'maxAxesRatio',1.5,...
-%               'parforPositions', 0,...
-%               'parNumWorkers',16};
-%           
-% param_file = fullfile(vars.outputDir,['ParameterFile_' vars.this_exp '.txt']);
-% %run function
-% modParamFile(vars.param_file_base,mod_params(1:2:end),mod_params(2:2:end),param_file) %initial parameter file
-% processCells(vars.sourceDir, fullfile(vars.outputDir,'prod'), param_file, vars.code_dir)
-
-params.doBlobProcessing = 2;
-params.doDotDetection = 1;
-params.dotDetectionAlg = 'wavelet';
-params.dotTrackingAlg = '';
-params.cellInclusionMargin = 1;
-params.noiseThreshold = 3;
-params.minSpotArea = 4;
-params.maxAxesRatio = 1.5;
-params.parforPositions = 0;
-params.parNumWorkers = 16;
-processCells(vars.sourceDir, fullfile(vars.outputDir,'prod'), params, vars.code_dir)
-
+% params.doBlobProcessing = 2;
+% params.doDotDetection = 1;
+% params.dotDetectionAlg = 'wavelet';
+% params.dotTrackingAlg = '';
+% params.cellInclusionMargin = 1;
+% params.noiseThreshold = 3;
+% params.minSpotArea = 4;
+% params.maxAxesRatio = 1.5;
+% params.parforPositions = 0;
+% params.parNumWorkers = 16;
+% processCells(vars.sourceDir, fullfile(vars.outputDir,'prod'), params, vars.code_dir)
 
 %-----------------------------
 %

@@ -1,4 +1,3 @@
-
 load('/hdd2/RecBCD2/codedev/Analysis/EXP-22-BY4442/therun/prod/expInfoObj.mat')
 
 [cell_indexes,Tspot] = find_cells_with_spots(expInfoObj,'Pos12','fluor_594_cherry')
